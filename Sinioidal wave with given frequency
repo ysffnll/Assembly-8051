@@ -1,0 +1,228 @@
+ORG 0000h
+GetData:
+	ACALL configure_lcd ; set lcd to write on it
+	mov 30h,#0
+	mov 31h,#0
+	mov r0,#0
+	mov r1,#0
+	mov r2,#0
+	mov r3,#0
+	mov r4,#0
+	mov r5,#0
+	mov r6,#0
+	mov r7,#0
+;1. decimal of b
+	ACALL KEYBOARD ; ----to take value from kay pad and write it into A (acc)
+	ACALL SEND_DATA ; ----to write the taken asci value on lcd
+	SUBB A,#30h ; ----to obtain number in decimal 0 to 9
+	mov b,#10
+	mul ab
+	MOV 30h,A
+;2. decimal of b
+	ACALL KEYBOARD ; ----to take value from kay pad and write it into A (acc)
+	ACALL SEND_DATA ; ----to write the taken asci value on lcd
+	SUBB A,#30h ; ----to obtain number in decimal 0 to 9
+	MOV 30h,A
+;second decimal of b
+	ACALL KEYBOARD ; ----to take value from kay pad and write it into A (acc)
+	ACALL SEND_DATA ; ----to write the taken asci value on lcd
+	SUBB A,#30h ; ----to obtain number in decimal 0 to 9
+	mov b,#10
+	mul ab
+	MOV 31h,A
+	;second decimal of b
+	ACALL KEYBOARD ; ----to take value from kay pad and write it into A (acc)
+	ACALL SEND_DATA ; ----to write the taken asci value on lcd
+	SUBB A,#30h ; ----to obtain number in decimal 0 to 9
+	MOV 31h,A
+	acall FIND_DELAY
+	SJMP WAVE
+NEXT2:	ACALL KEYBOARD
+WAVE: MOV DPTR,#TABLE
+MOV R0,#12
+BACK: CLR A
+MOVC A,@A+DPTR
+MOV P1,A ; sent to DAC
+ACALL DELAYWAVE ; produce a freq.
+INC DPTR
+DJNZ R0,BACK
+SJMP WAVE
+TABLE:
+DB 128,170,212,255,212,170
+DB 128,86,44,0,44,86
+
+DELAYWAVE:
+PUSH 2
+DJNZ R2,$
+POP 2
+RET
+
+FIND_DELAY:
+PUSH A
+;DIV BY 2
+MOV A,30H
+CLR C
+RRC A
+MOV 30H,A
+MOV A,31H
+RRC A
+MOV 31H,A
+;DIV BY 2
+MOV A,30H
+CLR C
+RRC A
+MOV 30H,A
+MOV A,31H
+RRC A
+MOV 31H,A
+;DIV BY 3
+MOV A,30H
+MOV B,5
+MUL AB
+MOV 30H,A
+MOV A,31H
+MOV B,#3
+DIV AB
+ADD A,30H
+MOV 30H,A
+; THE RESULT FOR DELAY WRITEN IN R2H
+PUSH 0
+PUSH 1
+MOV R1,#0
+MOV R0,#0
+MOV A,250
+MOV B,30H
+DIV AB
+MOV R0,A
+MOV A,B
+MOV B,#4
+MUL AB
+MOV B,30H
+DIV AB
+MOV R1,A
+MOV A,R0
+MOV B,#4
+MUL AB
+ADD A,R1
+MOV R2,A
+POP 1
+POP 0
+POP ACC
+RET
+ ;-------------------------------
+;lcd and keypad instructions
+;-------------------------------
+KEYBOARD_LOOP:
+	acall KEYBOARD
+	;now, A has the key pressed
+	acall SEND_DATA
+	sjmp KEYBOARD_LOOP
+
+CONFIGURE_LCD:	;THIS SUBROUTINE SENDS THE INITIALIZATION COMMANDS TO THE LCD
+	mov a,#38H	;TWO LINES, 5X7 MATRIX
+	acall SEND_COMMAND
+	mov a,#0FH	;DISPLAY ON, CURSOR BLINKING
+	acall SEND_COMMAND
+	mov a,#06H	;INCREMENT CURSOR (SHIFT CURSOR TO RIGHT)
+	acall SEND_COMMAND
+	mov a,#01H	;CLEAR DISPLAY SCREEN
+	acall SEND_COMMAND
+	mov a,#80H	;FORCE CURSOR TO BEGINNING OF THE FIRST LINE
+	acall SEND_COMMAND
+	ret
+
+SEND_COMMAND:
+	mov p1,a		;THE COMMAND IS STORED IN A, SEND IT TO LCD
+	clr p3.5		;RS=0 BEFORE SENDING COMMAND
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+
+SEND_DATA:
+	mov p1,a		;SEND THE DATA STORED IN A TO LCD
+	setb p3.5	;RS=1 BEFORE SENDING DATA
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+	
+DELAY:
+	push 0
+	push 1
+	mov r0,#50
+DELAY_OUTER_LOOP:
+	mov r1,#255
+	djnz r1,$
+	djnz r0,DELAY_OUTER_LOOP
+	pop 1
+	pop 0
+	ret
+
+
+KEYBOARD: ;takes the key pressed from the keyboard and puts it to A
+	mov	P0, #0ffh	;makes P0 input
+K1:
+	mov	P2, #0	;ground all rows
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, K1
+K2:
+	acall	DELAY
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, KB_OVER
+	sjmp	K2
+KB_OVER:
+	acall DELAY
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, KB_OVER1
+	sjmp	K2
+KB_OVER1:
+	mov	P2, #11111110B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_0
+	mov	P2, #11111101B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_1
+	mov	P2, #11111011B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_2
+	mov	P2, #11110111B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_3
+	ljmp	K2
+	
+ROW_0:
+	mov	DPTR, #KCODE0
+	sjmp	KB_FIND
+ROW_1:
+	mov	DPTR, #KCODE1
+	sjmp	KB_FIND
+ROW_2:
+	mov	DPTR, #KCODE2
+	sjmp	KB_FIND
+ROW_3:
+	mov	DPTR, #KCODE3
+KB_FIND:
+	rrc	A
+	jnc	KB_MATCH
+	inc	DPTR
+	sjmp	KB_FIND
+KB_MATCH:
+	clr	A
+	movc	A, @A+DPTR; get ASCII code from the table 
+	ret
+;ASCII look-up table
+KCODE0:	DB	'1', '2', '3', 'A'
+KCODE1:	DB	'4', '5', '6', 'B'
+KCODE2:	DB	'7', '8', '9', 'C'
+KCODE3:	DB	'*', '0', '#', 'D'
+END
